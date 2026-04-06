@@ -97,14 +97,43 @@ User clicks clip (or Alt+Shift+B, or right-click selection)
   → content.js extracts page/selection as Markdown
   → background.js sends POST to localhost:8642/v1/chat/completions
   → Hermes processes the message, stores in memory via hindsight provider
+  → background.js sends POST to localhost:19944/clip (NotchNotch toast)
+  → NotchNotch shows pacman toast with page title in the notch
   → background.js shows badge ✓/✗ + notification
+```
+
+## NotchNotch toast integration
+
+After a successful brain save to Hermes, the extension **must** notify NotchNotch so it can show a visual confirmation toast (animated purple pacman icon + page title) in the macOS notch.
+
+```
+POST http://localhost:19944/clip
+Content-Type: application/json
+
+{
+  "title": "Page Title Here",
+  "url": "https://example.com/page"
+}
+```
+
+- **Port 19944** — NotchNotch runs a tiny HTTP listener on this port (ClipperListener.swift)
+- **Fire after Hermes succeeds** — only send the toast notification after the brain save POST returns HTTP 200
+- **Non-blocking** — if NotchNotch is not running (port unreachable), silently ignore. Do not fail the clip.
+- **CORS** — the listener returns `Access-Control-Allow-Origin: *` so Chrome extension fetch works
+- **`host_permissions`** — manifest.json needs `http://localhost:19944/*` in addition to the Hermes port
+
+The flow becomes:
+```
+1. POST to Hermes (localhost:8642) → brain save
+2. If 200 OK → POST to NotchNotch (localhost:19944) → pacman toast
+3. Show badge ✓ + notification regardless of step 2
 ```
 
 ## Important gotchas
 
 - **Session ID must be prefixed** — `notchnotch-<user_id>`, NOT the raw user_id. See "The brain save pattern" above.
 - **Hermes may be offline** — always check health endpoint first, show clear error state.
-- **Chrome blocks localhost in some configs** — `host_permissions` for `http://localhost:8642/*` is already in manifest.json.
+- **Chrome blocks localhost in some configs** — `host_permissions` for `http://localhost:8642/*` and `http://localhost:19944/*` must both be in manifest.json.
 - **No chrome:// pages** — `content.js` cannot run on browser internal pages. Guard against this.
 - **50k char limit** — same as NotchNotch. Truncate with a `[...truncated at 50000 characters]` marker.
 - **Readability.js can fail** — some pages (SPAs, paywalled) won't parse. Fall back to `document.body.innerText`.
