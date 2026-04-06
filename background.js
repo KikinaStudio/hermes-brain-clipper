@@ -1,5 +1,10 @@
 const HERMES_URL = "http://localhost:8642/v1/chat/completions";
+const HEALTH_URL = "http://localhost:8642/health";
 const TIMEOUT_MS = 60000;
+
+// Session ID: must be notchnotch-<telegram_user_id>
+// Same format as NotchNotch's SessionStore.swift
+const SESSION_ID = "notchnotch-7921106232";
 
 // --- Context menu setup ---
 
@@ -11,7 +16,18 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// --- Shared Hermes API call ---
+// --- Health check ---
+
+async function checkHealth() {
+  try {
+    const res = await fetch(HEALTH_URL);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// --- Shared Hermes API call (matches ChatViewModel.saveToBrain + HermesClient.sendCompletion) ---
 
 async function sendToHermes(prompt) {
   const controller = new AbortController();
@@ -20,7 +36,10 @@ async function sendToHermes(prompt) {
   try {
     const res = await fetch(HERMES_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Hermes-Session-Id": SESSION_ID
+      },
       body: JSON.stringify({
         model: "hermes-agent",
         messages: [{ role: "user", content: prompt }],
@@ -35,17 +54,18 @@ async function sendToHermes(prompt) {
       throw new Error(`Failed: ${res.status}`);
     }
 
-    const data = await res.json();
-    return data.choices[0].message.content;
+    // Fire-and-forget: check 200, discard body (per CLAUDE.md)
   } catch (err) {
     clearTimeout(timer);
     if (err.name === "AbortError") throw new Error("Request timed out (60s)");
     if (err.message.startsWith("Failed:")) throw err;
-    throw new Error("Hermes is offline -- is the API server enabled? (API_SERVER_ENABLED=true in ~/.hermes/.env)");
+    throw new Error("Hermes is offline — is the API server enabled? (API_SERVER_ENABLED=true in ~/.hermes/.env)");
   }
 }
 
 // --- Full-page clip ---
+// Matches NotchNotch ChatViewModel.saveToBrain() prompt format exactly:
+// "Please save the following content to your memory. File: <source>\n\n<content>"
 
 async function clipTab(tabId) {
   const results = await chrome.scripting.executeScript({
@@ -58,23 +78,16 @@ async function clipTab(tabId) {
     throw new Error(result?.error || "Cannot access this page");
   }
 
-  const prompt = [
-    "I'm clipping this web page for future reference. Summarize the key points and save anything important to memory.",
-    "",
-    `Source: ${result.url}`,
-    `Title: ${result.title}`,
-    `Clipped: ${new Date().toISOString()}`,
-    "",
-    result.markdown
-  ].join("\n");
+  const source = `${result.title} (${result.url})`;
+  const prompt = `Please save the following content to your memory. File: ${source}\n\n${result.markdown}`;
 
   return sendToHermes(prompt);
 }
 
 // --- Selection clip (context menu) ---
+// Same saveToBrain pattern but with [selection] marker
 
 async function clipSelection(tab, selectionText) {
-  // Grab surrounding context from the page
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => {
@@ -89,19 +102,9 @@ async function clipSelection(tab, selectionText) {
   });
 
   const context = results[0]?.result || "";
-
-  const prompt = [
-    "I'm saving this excerpt for future reference. Remember the key information.",
-    "",
-    `Source: ${tab.url}`,
-    `Title: ${tab.title}`,
-    "",
-    "Excerpt:",
-    selectionText,
-    "",
-    "Surrounding context:",
-    context
-  ].join("\n");
+  const source = `${tab.title} (${tab.url}) [selection]`;
+  const content = context ? `${selectionText}\n\nSurrounding context:\n${context}` : selectionText;
+  const prompt = `Please save the following content to your memory. File: ${source}\n\n${content}`;
 
   return sendToHermes(prompt);
 }
@@ -131,11 +134,18 @@ function notify(title, message) {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type !== "CLIP") return;
 
-  chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+  chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
     if (!tab || tab.url?.startsWith("chrome://")) {
       sendResponse({ error: "Cannot clip browser internal pages" });
       return;
     }
+
+    const online = await checkHealth();
+    if (!online) {
+      sendResponse({ error: "Hermes is offline — start the API server first" });
+      return;
+    }
+
     clipTab(tab.id)
       .then(() => sendResponse({ ok: true }))
       .catch(err => sendResponse({ error: err.message }));
