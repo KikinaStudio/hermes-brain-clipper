@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Hermes Brain Clipper",
-  "description": "Clip web pages to your Hermes AI agent's brain",
+  "name": "NotchNotch Clipper",
+  "description": "Clip web pages to your NotchNotch AI agent's brain",
   "version": "1.0.0",
   "permissions": [
     "activeTab",

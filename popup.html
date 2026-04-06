@@ -4,45 +4,58 @@
   <meta charset="utf-8">
   <style>
     body {
-      width: 280px;
+      width: 220px;
       margin: 0;
-      padding: 20px;
-      background: #1a1a1a;
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 14px;
-      text-align: center;
+      padding: 10px 14px;
+      background: #000;
+      font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
+      font-size: 12px;
+      line-height: 1;
     }
-    .icon {
-      width: 36px;
-      height: 36px;
-      margin: 0 auto 12px;
+    #status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
     }
+    #icon {
+      width: 10px;
+      height: 10px;
+      flex-shrink: 0;
+    }
+    #icon path { fill: #C099FF; }
     #message {
-      font-size: 15px;
-      font-weight: 600;
-      line-height: 1.4;
+      color: #666;
     }
     #detail {
-      margin-top: 8px;
-      font-size: 12px;
-      color: #888;
+      margin-top: 6px;
+      padding-left: 14px;
+      color: #444;
+      font-size: 11px;
     }
+
+    /* States */
+    .sending #icon { animation: pulse 1s ease-in-out infinite; }
     .sending #message { color: #C099FF; }
-    .ok #message { color: #22c55e; }
-    .err #message { color: #ef4444; }
-    .err #detail { color: #ef4444; opacity: 0.7; }
+
+    .ok #icon path { fill: #22c55e; }
+    .ok #message { color: #888; }
+
+    .err #icon path { fill: #ef4444; }
+    .err #message { color: #666; }
+    .err #detail { color: #ef4444; }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+      50% { opacity: 0.2; }
     }
-    .sending .icon { animation: pulse 1.2s ease-in-out infinite; }
   </style>
 </head>
 <body class="sending">
-  <img class="icon" src="icons/128.png" alt="">
-  <div id="message">Clipping page...</div>
+  <div id="status">
+    <svg id="icon" viewBox="0 0 5 5" xmlns="http://www.w3.org/2000/svg"><path d="M3.52734 0C4.34057 0.000230008 4.99977 0.659433 5 1.47266V5H0V4.99902H1V3.99902H0V2.99902H1V1.99902H0V1.47266C0.000230008 0.659433 0.659433 0.000230008 1.47266 0H3.52734ZM2 3.99902V4.99902H3V3.99902H2ZM1 2.99902V3.99902H2V2.99902H1Z"/></svg>
+    <div id="message">notchnotching...</div>
+  </div>
   <div id="detail"></div>
   <script src="popup.js"></script>
 </body>
