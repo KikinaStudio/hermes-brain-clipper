@@ -9,7 +9,8 @@
     "contextMenus"
   ],
   "host_permissions": [
-    "http://localhost:8642/*"
+    "http://localhost:8642/*",
+    "http://localhost:19944/*"
   ],
   "action": {
     "default_popup": "popup.html",

@@ -1,5 +1,6 @@
 const HERMES_URL = "http://localhost:8642/v1/chat/completions";
 const HEALTH_URL = "http://localhost:8642/health";
+const NOTCH_TOAST_URL = "http://localhost:19944/clip";
 const TIMEOUT_MS = 60000;
 
 // Session ID: must be notchnotch-<telegram_user_id>
@@ -63,6 +64,20 @@ async function sendToHermes(prompt) {
   }
 }
 
+// --- NotchNotch toast notification (non-blocking) ---
+
+async function notifyNotch(title, url) {
+  try {
+    await fetch(NOTCH_TOAST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, url })
+    });
+  } catch {
+    // NotchNotch not running — silently ignore
+  }
+}
+
 // --- Full-page clip ---
 // Matches NotchNotch ChatViewModel.saveToBrain() prompt format exactly:
 // "Please save the following content to your memory. File: <source>\n\n<content>"
@@ -81,7 +96,8 @@ async function clipTab(tabId) {
   const source = `${result.title} (${result.url})`;
   const prompt = `Please save the following content to your memory. File: ${source}\n\n${result.markdown}`;
 
-  return sendToHermes(prompt);
+  await sendToHermes(prompt);
+  await notifyNotch(result.title, result.url);
 }
 
 // --- Selection clip (context menu) ---
@@ -106,7 +122,8 @@ async function clipSelection(tab, selectionText) {
   const content = context ? `${selectionText}\n\nSurrounding context:\n${context}` : selectionText;
   const prompt = `Please save the following content to your memory. File: ${source}\n\n${content}`;
 
-  return sendToHermes(prompt);
+  await sendToHermes(prompt);
+  await notifyNotch(tab.title, tab.url);
 }
 
 // --- Badge feedback ---
