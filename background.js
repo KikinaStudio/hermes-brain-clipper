@@ -117,14 +117,62 @@ function showBadge(tabId, success) {
   setTimeout(() => chrome.action.setBadgeText({ text: "", tabId }), 3000);
 }
 
-// --- Notification feedback ---
+// --- In-page toast (injected into the tab) ---
 
-function notify(title, message) {
-  chrome.notifications.create({
-    type: "basic",
-    iconUrl: "icons/128.png",
-    title,
-    message
+function showToast(tabId, success, errorMsg) {
+  chrome.scripting.executeScript({
+    target: { tabId },
+    func: (ok, err) => {
+      // ok === null = in progress, true = success, false = error
+      // Remove existing toast if any
+      document.getElementById("__notchnotch-toast")?.remove();
+
+      const toast = document.createElement("div");
+      toast.id = "__notchnotch-toast";
+      toast.innerHTML = `
+        <svg width="10" height="10" viewBox="0 0 5 5" xmlns="http://www.w3.org/2000/svg"
+          ${ok === null ? 'style="animation:__nn-pulse 1s ease-in-out infinite"' : ''}>
+          <path d="M3.52734 0C4.34057 0.000230008 4.99977 0.659433 5 1.47266V5H0V4.99902H1V3.99902H0V2.99902H1V1.99902H0V1.47266C0.000230008 0.659433 0.659433 0.000230008 1.47266 0H3.52734ZM2 3.99902V4.99902H3V3.99902H2ZM1 2.99902V3.99902H2V2.99902H1Z"
+            fill="${ok === null ? '#C099FF' : ok ? '#22c55e' : '#ef4444'}"/>
+        </svg>
+        <span>${ok === null ? "notchnotching..." : ok ? "notchnotched" : "clip failed"}</span>
+        ${ok === false && err ? `<span style="color:#ef4444;opacity:0.7;margin-left:6px">${err}</span>` : ""}
+      `;
+      Object.assign(toast.style, {
+        position: "fixed",
+        bottom: "20px",
+        right: "20px",
+        zIndex: "2147483647",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        padding: "8px 14px",
+        background: "#000",
+        border: "1px solid #222",
+        borderRadius: "6px",
+        fontFamily: '"SF Mono","Menlo","Monaco","Consolas",monospace',
+        fontSize: "12px",
+        color: ok === null ? "#C099FF" : ok ? "#888" : "#666",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
+        transition: "opacity 0.3s",
+      });
+      // Add pulse animation
+      if (!document.getElementById("__notchnotch-style")) {
+        const style = document.createElement("style");
+        style.id = "__notchnotch-style";
+        style.textContent = "@keyframes __nn-pulse{0%,100%{opacity:1}50%{opacity:0.2}}";
+        document.head.appendChild(style);
+      }
+      document.body.appendChild(toast);
+      // Auto-dismiss on success/error, not while in progress
+      if (ok !== null) {
+        setTimeout(() => {
+          toast.style.opacity = "0";
+          setTimeout(() => toast.remove(), 300);
+        }, ok ? 1500 : 4000);
+      }
+    },
+    args: [success, errorMsg]
   });
 }
 
@@ -158,15 +206,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== "notchnotch-it") return;
 
+  showToast(tab.id, null); // show "notchnotching..." state
   clipSelection(tab, info.selectionText)
-    .then(() => {
-      showBadge(tab.id, true);
-      notify("Clipped to brain", "Selection saved successfully");
-    })
-    .catch(err => {
-      showBadge(tab.id, false);
-      notify("Clip failed", err.message);
-    });
+    .then(() => showToast(tab.id, true))
+    .catch(err => showToast(tab.id, false, err.message));
 });
 
 // Keyboard shortcut (Alt+Shift+B) -- fires when popup is not shown

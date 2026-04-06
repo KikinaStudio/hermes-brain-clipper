@@ -6,8 +6,7 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "contextMenus",
-    "notifications"
+    "contextMenus"
   ],
   "host_permissions": [
     "http://localhost:8642/*"
